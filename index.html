@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maarif Diplomat Oyunu (Shuffle)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Noto+Naskh+Arabic:wght@400;700&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            background-color: #020617; 
+            color: white; 
+            user-select: none; 
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .font-sans { font-family: 'Inter', sans-serif; }
+        .font-arabic { font-family: 'Noto Naskh Arabic', serif; }
+        .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; line-height: 2; }
+
+        .game-container { 
+            width: 100%;
+            max-width: 1024px;
+            height: 100%;
+            max-height: 600px;
+            background: #1e293b; 
+            position: relative; 
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        @media (min-width: 768px) {
+            .game-container {
+                border-radius: 1rem;
+                border: 1px solid #334155;
+            }
+        }
+        
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide { animation: slideIn 0.4s ease-out forwards; }
+        
+        .chat-area { overflow-y: auto; scroll-behavior: smooth; }
+        .chat-area::-webkit-scrollbar { width: 6px; }
+        .chat-area::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .chat-area::-webkit-scrollbar-track { background: #0f172a; }
+
+        .msg-user { border-bottom-right-radius: 0 !important; margin-left: auto; background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+        .msg-bot { border-bottom-left-radius: 0 !important; margin-right: auto; background: #334155; }
+        
+        [dir="rtl"] .msg-user { border-bottom-left-radius: 0 !important; border-bottom-right-radius: 1rem !important; margin-right: auto; margin-left: 0; }
+        [dir="rtl"] .msg-bot { border-bottom-right-radius: 0 !important; border-bottom-left-radius: 1rem !important; margin-left: auto; margin-right: 0; }
+
+        .btn-hover-effect:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+    </style>
+</head>
+<body class="font-sans">
+
+<div id="app" class="game-container">
+    <!-- İçerik JavaScript ile buraya yüklenecek -->
+</div>
+
+<script>
+    // --- YARDIMCI FONKSİYON: DİZİ KARIŞTIRMA (Fisher-Yates Shuffle) ---
+    function shuffleArray(array) {
+        // Dizinin kopyasını oluştur (Orijinal veri bozulmasın diye)
+        let shuffled = [...array]; 
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+
+    // --- ÇOKLU DİL VERİTABANI ---
+    const DB = {
+        tr: {
+            font: 'font-sans', dir: 'ltr',
+            headerTitle: "MAARİF DİPLOMAT OYUNU",
+            back: "Geri Dön",
+            selectCat: "Tarafını Seç",
+            countries: "Devletler ve Otoriteler",
+            companies: "Kapitalist Şirketler",
+            selectScen: "Müzakere Konusu",
+            turn: "Tur",
+            relation: "Barış İbresi",
+            win: "DİPLOMATİK ZAFER!",
+            winMsg: "Barışçıl ısrarınızla güç odaklarını dize getirdiniz. Gelecek sizin!",
+            lose: "MÜZAKERE BAŞARISIZ",
+            loseMsg: "Güç odakları sizi ezdi veya savaş çıktı. Dünya kaybetti.",
+            restart: "Tekrar Oyna",
+            scenarios: {
+                climate: "İklim Krizi", migration: "Göç Sorunu", economy: "Ekonomik Kriz", war: "Savaş Riski",
+                apple: "Veri Gizliliği", amazon: "İşçi Sömürüsü", tesla: "Yapay Zeka Etiği", boston: "Robot Silahlar"
+            },
+            opponents: {
+                climate: "Sanayi Lobisi", migration: "Sınır Güvenliği", economy: "Dünya Bankası", war: "Savaş Bakanlığı",
+                apple: "Tech Giant CEO", amazon: "Lojistik Devi", tesla: "AI Geliştirici", boston: "Savunma Sanayi"
+            },
+            questions: [
+                { q: "Bizim tek önceliğimiz kar ve güvenliktir. Sizin romantik barış hayalleriniz bize para kazandırmıyor. Neden sizi dinleyelim?", 
+                  a: [
+                    { t: "Çünkü barış olmadan ticaret yapacak bir dünya kalmayacak.", s: 10 }, 
+                    { t: "Haklısınız, paradan önemli bir şey yok.", s: -20 }, 
+                    { t: "Sizi yok edeceğiz! Bekleyin görün!", s: -15 }, 
+                    { t: "Gelecek nesiller sizi yargılayacak.", s: 5 } 
+                  ]
+                },
+                { q: "Bütçeyi silahlara ve duvarlara ayırdık. İnsan hakları şu an lüks. Buna itirazınız mı var?",
+                  a: [
+                    { t: "Silahlar sadece korku üretir, eğitim ise güven.", s: 10 },
+                    { t: "Duvarları daha yüksek yapmalıyız.", s: -20 },
+                    { t: "O silahları size karşı kullanırız.", s: -15 },
+                    { t: "Kaynakları bölüşürsek duvarlara gerek kalmaz.", s: 15 }
+                  ]
+                },
+                { q: "Halk protesto ediyor ama medyamız sayesinde onları susturuyoruz. Siz ne yapabilirsiniz ki?",
+                  a: [
+                    { t: "Gerçeklerin er ya da geç ortaya çıkma huyu vardır.", s: 10 },
+                    { t: "Bize de biraz hisse verirseniz susarız.", s: -30 },
+                    { t: "Sosyal medyadan sizi linç ettireceğiz.", s: -5 },
+                    { t: "Halkı susturmak yerine onları dinleyin.", s: 15 }
+                  ]
+                },
+                { q: "Son uyarımız. Ya şartlarımızı kabul edersiniz ya da masadan kalkarız. Güç bizde.",
+                  a: [
+                    { t: "Güç halktadır, siz sadece yöneticisiniz.", s: 20 },
+                    { t: "Tamam, ne derseniz o olsun.", s: -20 },
+                    { t: "Defolun gidin!", s: -30 },
+                    { t: "Ortak bir zemin bulmak zorundayız, lütfen.", s: 5 }
+                  ]
+                }
+            ]
+        },
+        en: {
+            font: 'font-sans', dir: 'ltr',
+            headerTitle: "MAARIF DIPLOMAT GAME",
+            back: "Go Back",
+            selectCat: "Select Faction",
+            countries: "States & Authorities",
+            companies: "Capitalist Corporations",
+            selectScen: "Negotiation Topic",
+            turn: "Turn",
+            relation: "Peace Meter",
+            win: "DIPLOMATIC VICTORY!",
+            winMsg: "You convinced the powers with peace. The future is yours!",
+            lose: "NEGOTIATION FAILED",
+            loseMsg: "Power structures crushed you. The world lost.",
+            restart: "Play Again",
+            scenarios: {
+                climate: "Climate Crisis", migration: "Migration Crisis", economy: "Economic Crisis", war: "War Risk",
+                apple: "Data Privacy", amazon: "Labor Rights", tesla: "AI Ethics", boston: "Robot Weapons"
+            },
+            opponents: {
+                climate: "Industry Lobby", migration: "Border Control", economy: "World Bank", war: "Ministry of War",
+                apple: "Tech Giant CEO", amazon: "Logistics Giant", tesla: "AI Developer", boston: "Defense Corp"
+            },
+            questions: [
+                { q: "Our priority is profit and security. Your romantic peace dreams don't make money. Why listen to you?", 
+                  a: [
+                    { t: "Without peace, there is no world to trade in.", s: 10 },
+                    { t: "You are right, money is everything.", s: -20 },
+                    { t: "We will destroy you! Just wait!", s: -15 },
+                    { t: "Future generations will judge you.", s: 5 }
+                  ]
+                },
+                { q: "We allocated budget to weapons. Human rights are a luxury. Do you object?",
+                  a: [
+                    { t: "Weapons breed fear, education breeds trust.", s: 10 },
+                    { t: "Build higher walls.", s: -20 },
+                    { t: "We will use those weapons against you.", s: -15 },
+                    { t: "Share resources, and walls become obsolete.", s: 15 }
+                  ]
+                },
+                { q: "People protest, but we silence them via media. What can you do?",
+                  a: [
+                    { t: "Truth has a habit of revealing itself.", s: 10 },
+                    { t: "Give us shares and we stay silent.", s: -30 },
+                    { t: "We will cancel you on social media.", s: -5 },
+                    { t: "Listen to the people instead of silencing them.", s: 15 }
+                  ]
+                },
+                { q: "Final warning. Accept our terms or we leave. We have the power.",
+                  a: [
+                    { t: "Power lies with the people, not you.", s: 20 },
+                    { t: "Okay, whatever you say.", s: -20 },
+                    { t: "Get out!", s: -30 },
+                    { t: "We must find common ground, please.", s: 5 }
+                  ]
+                }
+            ]
+        },
+        fr: {
+            font: 'font-sans', dir: 'ltr',
+            headerTitle: "JEU DIPLOMATE MAARIF",
+            back: "Retour",
+            selectCat: "Choisissez le camp",
+            countries: "États et Autorités",
+            companies: "Sociétés Capitalistes",
+            selectScen: "Sujet de Négociation",
+            turn: "Tour",
+            relation: "Jauge de Paix",
+            win: "VICTOIRE DIPLOMATIQUE!",
+            winMsg: "La paix a triomphé du pouvoir.",
+            lose: "ÉCHEC DIPLOMATIQUE",
+            loseMsg: "Le pouvoir vous a écrasé.",
+            restart: "Rejouer",
+            scenarios: {
+                climate: "Crise Climatique", migration: "Migration", economy: "Crise Économique", war: "Risque de Guerre",
+                apple: "Confidentialité", amazon: "Droits des Travailleurs", tesla: "Éthique IA", boston: "Armes Robots"
+            },
+            opponents: {
+                climate: "Lobby Industriel", migration: "Contrôle Frontières", economy: "Banque Mondiale", war: "Ministère Guerre",
+                apple: "PDG Tech", amazon: "Géant Logistique", tesla: "Développeur IA", boston: "Défense Corp"
+            },
+            questions: [
+                { q: "Le profit est notre priorité. La paix ne rapporte rien. Pourquoi vous écouter?", 
+                  a: [
+                    { t: "Sans paix, il n'y a pas de commerce.", s: 10 },
+                    { t: "Vous avez raison, l'argent est roi.", s: -20 },
+                    { t: "Nous allons vous détruire!", s: -15 },
+                    { t: "L'histoire vous jugera.", s: 5 }
+                  ]
+                },
+                { q: "Le budget va aux armes. Les droits humains sont un luxe. Une objection?",
+                  a: [
+                    { t: "Les armes créent la peur, l'éducation la confiance.", s: 10 },
+                    { t: "Construisez des murs plus hauts.", s: -20 },
+                    { t: "Nous utiliserons ces armes contre vous.", s: -15 },
+                    { t: "Partagez les ressources, plus besoin de murs.", s: 15 }
+                  ]
+                },
+                { q: "Les gens protestent, mais nous contrôlons les médias. Que ferez-vous?",
+                  a: [
+                    { t: "La vérité finit toujours par sortir.", s: 10 },
+                    { t: "Payez-nous et nous nous tairons.", s: -30 },
+                    { t: "Nous vous attaquerons en ligne.", s: -5 },
+                    { t: "Écoutez le peuple au lieu de le faire taire.", s: 15 }
+                  ]
+                },
+                { q: "Dernier avertissement. Acceptez ou partez. Nous avons le pouvoir.",
+                  a: [
+                    { t: "Le pouvoir appartient au peuple.", s: 20 },
+                    { t: "D'accord, comme vous voulez.", s: -20 },
+                    { t: "Sortez d'ici!", s: -30 },
+                    { t: "Trouvons un terrain d'entente.", s: 5 }
+                  ]
+                }
+            ]
+        },
+        ar: {
+            font: 'font-arabic', dir: 'rtl',
+            headerTitle: "لعبة معارف الدبلوماسية",
+            back: "رجوع",
+            selectCat: "اختر الجانب",
+            countries: "الدول والسلطات",
+            companies: "الشركات الرأسمالية",
+            selectScen: "موضوع التفاوض",
+            turn: "جولة",
+            relation: "مقياس السلام",
+            win: "نصر دبلوماسي!",
+            winMsg: "لقد أقنعت القوى بالسلام. المستقبل لك!",
+            lose: "فشل التفاوض",
+            loseMsg: "سحقتك هياكل السلطة. خسر العالم.",
+            restart: "لعب مرة أخرى",
+            scenarios: {
+                climate: "أزمة المناخ", migration: "أزمة الهجرة", economy: "أزمة اقتصادية", war: "خطر الحرب",
+                apple: "خصوصية البيانات", amazon: "حقوق العمال", tesla: "أخلاقيات الذكاء الاصطناعي", boston: "أسلحة الروبوت"
+            },
+            opponents: {
+                climate: "اللوبي الصناعي", migration: "أمن الحدود", economy: "البنك الدولي", war: "وزارة الحرب",
+                apple: "الرئيس التنفيذي للتكنولوجيا", amazon: "عملاق الخدمات اللوجستية", tesla: "مطور الذكاء الاصطناعي", boston: "شركة الدفاع"
+            },
+            questions: [
+                { q: "أولويتنا هي الربح والأمن. أحلام السلام لا تجني المال. لماذا نستمع إليك؟", 
+                  a: [
+                    { t: "بدون سلام، لن يكون هناك عالم للتجارة.", s: 10 },
+                    { t: "أنت محق، المال هو كل شيء.", s: -20 },
+                    { t: "سندمركم! فقط انتظروا!", s: -15 },
+                    { t: "الأجيال القادمة سوف تحكم عليك.", s: 5 }
+                  ]
+                },
+                { q: "خصصنا الميزانية للأسلحة. حقوق الإنسان رفاهية. هل تعترض؟",
+                  a: [
+                    { t: "الأسلحة تولد الخوف، والتعليم يولد الثقة.", s: 10 },
+                    { t: "ابنوا جدرانًا أعلى.", s: -20 },
+                    { t: "سنستخدم تلك الأسلحة ضدكم.", s: -15 },
+                    { t: "شاركوا الموارد، وستصبح الجدران بلا جدوى.", s: 15 }
+                  ]
+                },
+                { q: "الناس يحتجون، لكننا نسكتهم عبر الإعلام. ماذا يمكنك أن تفعل؟",
+                  a: [
+                    { t: "الحقيقة ستظهر عاجلاً أم آجلاً.", s: 10 },
+                    { t: "ادفعوا لنا وسنلتزم الصمت.", s: -30 },
+                    { t: "سنهاجمكم على وسائل التواصل.", s: -5 },
+                    { t: "استمعوا للناس بدل إسكاتهم.", s: 15 }
+                  ]
+                },
+                { q: "تحذير أخير. اقبلوا شروطنا أو نغادر. القوة معنا.",
+                  a: [
+                    { t: "القوة بيد الشعب، وليس بيدكم.", s: 20 },
+                    { t: "حسنًا، كما تريدون.", s: -20 },
+                    { t: "اخرجوا من هنا!", s: -30 },
+                    { t: "يجب أن نجد أرضية مشتركة.", s: 5 }
+                  ]
+                }
+            ]
+        },
+        es: {
+            font: 'font-sans', dir: 'ltr',
+            headerTitle: "JUEGO DIPLOMÁTICO MAARIF",
+            back: "Atrás",
+            selectCat: "Selecciona Facción",
+            countries: "Estados y Autoridades",
+            companies: "Corporaciones Capitalistas",
+            selectScen: "Tema de Negociación",
+            turn: "Turno",
+            relation: "Medidor de Paz",
+            win: "¡VICTORIA DIPLOMÁTICA!",
+            winMsg: "Triunfaste con la paz.",
+            lose: "FRACASO DIPLOMÁTICO",
+            loseMsg: "El poder te aplastó.",
+            restart: "Jugar de Nuevo",
+            scenarios: {
+                climate: "Crisis Climática", migration: "Migración", economy: "Crisis Económica", war: "Riesgo de Guerra",
+                apple: "Privacidad", amazon: "Derechos Laborales", tesla: "Ética IA", boston: "Armas Robot"
+            },
+            opponents: {
+                climate: "Lobby Industrial", migration: "Control Fronterizo", economy: "Banco Mundial", war: "Ministerio de Guerra",
+                apple: "CEO Tecnológico", amazon: "Gigante Logístico", tesla: "Desarrollador IA", boston: "Corp. Defensa"
+            },
+            questions: [
+                { q: "Nuestra prioridad es el lucro. La paz no da dinero. ¿Por qué escucharte?", 
+                  a: [
+                    { t: "Sin paz, no hay comercio.", s: 10 },
+                    { t: "Tienes razón, el dinero manda.", s: -20 },
+                    { t: "¡Los destruiremos!", s: -15 },
+                    { t: "La historia los juzgará.", s: 5 }
+                  ]
+                },
+                { q: "El presupuesto es para armas. Los DDHH son un lujo. ¿Te opones?",
+                  a: [
+                    { t: "Las armas crean miedo, la educación confianza.", s: 10 },
+                    { t: "Construyan muros más altos.", s: -20 },
+                    { t: "Usaremos esas armas en su contra.", s: -15 },
+                    { t: "Compartan recursos y no habrá muros.", s: 15 }
+                  ]
+                },
+                { q: "La gente protesta, pero controlamos los medios. ¿Qué harán?",
+                  a: [
+                    { t: "La verdad siempre sale a la luz.", s: 10 },
+                    { t: "Págannos y callaremos.", s: -30 },
+                    { t: "Los atacaremos en redes sociales.", s: -5 },
+                    { t: "Escuchen al pueblo en lugar de callarlo.", s: 15 }
+                  ]
+                },
+                { q: "Última advertencia. Acepten o nos vamos. Tenemos el poder.",
+                  a: [
+                    { t: "El poder reside en el pueblo.", s: 20 },
+                    { t: "Está bien, lo que digan.", s: -20 },
+                    { t: "¡Lárguense!", s: -30 },
+                    { t: "Debemos encontrar un acuerdo.", s: 5 }
+                  ]
+                }
+            ]
+        },
+        ru: {
+            font: 'font-sans', dir: 'ltr',
+            headerTitle: "ДИПЛОМАТИЧЕСКАЯ ИГРА MAARIF",
+            back: "Назад",
+            selectCat: "Выберите Сторону",
+            countries: "Государства и Власти",
+            companies: "Капиталистические Корпорации",
+            selectScen: "Тема Переговоров",
+            turn: "Ход",
+            relation: "Индикатор Мира",
+            win: "ДИПЛОМАТИЧЕСКАЯ ПОБЕДА!",
+            winMsg: "Мир победил силу.",
+            lose: "ПРОВАЛ",
+            loseMsg: "Власть раздавила вас.",
+            restart: "Играть Снова",
+            scenarios: {
+                climate: "Климатический Кризис", migration: "Миграция", economy: "Экономический Кризис", war: "Риск Войны",
+                apple: "Конфиденциальность", amazon: "Трудовые Права", tesla: "Этика ИИ", boston: "Роботы-Оружие"
+            },
+            opponents: {
+                climate: "Промышленное Лобби", migration: "Погранконтроль", economy: "Всемирный Банк", war: "Министерство Войны",
+                apple: "CEO Техногиганта", amazon: "Логистический Гигант", tesla: "Разработчик ИИ", boston: "Оборонная Корп."
+            },
+            questions: [
+                { q: "Наша цель - прибыль. Мир не приносит денег. Зачем нам слушать вас?", 
+                  a: [
+                    { t: "Без мира не будет торговли.", s: 10 },
+                    { t: "Вы правы, деньги это всё.", s: -20 },
+                    { t: "Мы уничтожим вас!", s: -15 },
+                    { t: "История рассудит нас.", s: 5 }
+                  ]
+                },
+                { q: "Бюджет идет на оружие. Права человека - роскошь. Возражаете?",
+                  a: [
+                    { t: "Оружие рождает страх, образование - доверие.", s: 10 },
+                    { t: "Стройте стены выше.", s: -20 },
+                    { t: "Мы используем это оружие против вас.", s: -15 },
+                    { t: "Делитесь ресурсами, и стены не нужны.", s: 15 }
+                  ]
+                },
+                { q: "Люди протестуют, но СМИ наши. Что вы сделаете?",
+                  a: [
+                    { t: "Правда всегда выходит наружу.", s: 10 },
+                    { t: "Заплатите нам, и мы замолчим.", s: -30 },
+                    { t: "Мы атакуем вас в соцсетях.", s: -5 },
+                    { t: "Слушайте людей, а не затыкайте их.", s: 15 }
+                  ]
+                },
+                { q: "Последнее предупреждение. Примите условия или мы уходим.",
+                  a: [
+                    { t: "Власть принадлежит народу.", s: 20 },
+                    { t: "Хорошо, как скажете.", s: -20 },
+                    { t: "Убирайтесь!", s: -30 },
+                    { t: "Мы должны найти компромисс.", s: 5 }
+                  ]
+                }
+            ]
+        },
+        ur: {
+            font: 'font-urdu', dir: 'rtl',
+            headerTitle: "معارف ڈپلومیٹ گیم",
+            back: "واپس",
+            selectCat: "فریق منتخب کریں",
+            countries: "ریاستیں اور حکام",
+            companies: "سرمایہ دار کمپنیاں",
+            selectScen: "مذاکرات کا موضوع",
+            turn: "باری",
+            relation: "امن کا میٹر",
+            win: "سفارتی فتح!",
+            winMsg: "آپ نے طاقت کو امن سے قائل کیا۔ مستقبل آپ کا ہے!",
+            lose: "مذاکرات ناکام",
+            loseMsg: "طاقت کے ڈھانچوں نے آپ کو کچل دیا۔ دنیا ہار گئی۔",
+            restart: "دوبارہ کھیلیں",
+            scenarios: {
+                climate: "ماحولیاتی بحران", migration: "ہجرت کا مسئلہ", economy: "معاشی بحران", war: "جنگ کا خطرہ",
+                apple: "ڈیٹا کی رازداری", amazon: "مزدوروں کے حقوق", tesla: "مصنوعی ذہانت کے اخلاقیات", boston: "روبوٹ ہتھیار"
+            },
+            opponents: {
+                climate: "صنعتی لابی", migration: "سرحدی کنٹرول", economy: "ورلڈ بینک", war: "وزارت جنگ",
+                apple: "ٹیک کمپنی سی ای او", amazon: "لاجسٹک کمپنی", tesla: "AI ڈویلپر", boston: "دفاعی کارپوریشن"
+            },
+            questions: [
+                { q: "ہماری ترجیح منافع ہے۔ امن سے پیسہ نہیں بنتا۔ ہم آپ کو کیوں سنیں؟", 
+                  a: [
+                    { t: "امن کے بغیر تجارت کے لیے کوئی دنیا نہیں بچے گی۔", s: 10 },
+                    { t: "آپ صحیح کہہ رہے ہیں، پیسہ ہی سب کچھ ہے۔", s: -20 },
+                    { t: "ہم آپ کو تباہ کر دیں گے!", s: -15 },
+                    { t: "آنے والی نسلیں آپ کا فیصلہ کریں گی۔", s: 5 }
+                  ]
+                },
+                { q: "ہم نے بجٹ ہتھیاروں کے لیے مختص کیا۔ انسانی حقوق ایک تعیش ہیں۔ کیا آپ کو اعتراض ہے؟",
+                  a: [
+                    { t: "ہتھیار خوف پیدا کرتے ہیں، تعلیم اعتماد پیدا کرتی ہے۔", s: 10 },
+                    { t: "دیواریں مزید اونچی بنائیں۔", s: -20 },
+                    { t: "ہم وہ ہتھیار آپ کے خلاف استعمال کریں گے۔", s: -15 },
+                    { t: "وسائل بانٹیں، دیواروں کی ضرورت نہیں رہے گی۔", s: 15 }
+                  ]
+                },
+                { q: "لوگ احتجاج کر رہے ہیں، لیکن میڈیا ہمارے کنٹرول میں ہے۔ آپ کیا کر سکتے ہیں؟",
+                  a: [
+                    { t: "سچائی ہمیشہ سامنے آ ہی جاتی ہے۔", s: 10 },
+                    { t: "ہمیں پیسے دیں اور ہم خاموش رہیں گے۔", s: -30 },
+                    { t: "ہم سوشل میڈیا پر آپ پر حملہ کریں گے۔", s: -5 },
+                    { t: "لوگوں کو خاموش کرنے کے بجائے ان کی بات سنیں۔", s: 15 }
+                  ]
+                },
+                { q: "آخری انتباہ۔ ہماری شرائط مان لیں ورنہ ہم جا رہے ہیں۔ طاقت ہمارے پاس ہے۔",
+                  a: [
+                    { t: "طاقت عوام کے پاس ہے، آپ کے پاس نہیں۔", s: 20 },
+                    { t: "ٹھیک ہے، جو آپ کہیں۔", s: -20 },
+                    { t: "نکل جاؤ یہاں سے!", s: -30 },
+                    { t: "ہمیں کوئی درمیانی راستہ نکالنا ہوگا۔", s: 5 }
+                  ]
+                }
+            ]
+        }
+    };
+
+    // --- OYUN STATE ---
+    let state = {
+        lang: 'tr',
+        phase: 'lang', // lang -> category -> scenario -> game -> result
+        category: null,
+        scenarioKey: null,
+        score: 50,
+        turn: 1,
+        maxTurns: 20,
+        history: []
+    };
+
+    const app = document.getElementById('app');
+
+    // --- NAVIGATION LOGIC ---
+    function goBack() {
+        if(state.phase === 'result') { state.phase = 'lang'; }
+        else if(state.phase === 'game') { state.phase = 'scenario'; }
+        else if(state.phase === 'scenario') { state.phase = 'category'; }
+        else if(state.phase === 'category') { state.phase = 'lang'; }
+        render();
+    }
+
+    // --- RENDERERS ---
+
+    function render() {
+        app.innerHTML = '';
+        const langData = DB[state.lang] || DB['tr'];
+        
+        document.body.className = langData.font;
+        document.body.dir = langData.dir;
+
+        const header = document.createElement('div');
+        header.className = "bg-slate-900/90 backdrop-blur-sm p-4 border-b border-slate-700 flex items-center justify-between sticky top-0 z-50 shadow-lg shrink-0";
+        
+        const titleDiv = document.createElement('div');
+        titleDiv.className = "text-center w-full font-bold text-blue-400 tracking-wider text-lg md:text-xl";
+        titleDiv.innerHTML = langData.headerTitle;
+
+        if (state.phase !== 'lang') {
+            const backBtn = document.createElement('button');
+            backBtn.onclick = goBack;
+            backBtn.className = "absolute left-6 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm border border-slate-600 transition-colors flex items-center gap-2";
+            backBtn.innerText = langData.dir === 'rtl' ? '➜' : '⬅ ' + langData.back;
+            if(langData.dir === 'rtl') backBtn.className += " right-6 left-auto"; 
+            header.appendChild(backBtn);
+        }
+        
+        header.appendChild(titleDiv);
+        app.appendChild(header);
+
+        const content = document.createElement('div');
+        content.className = "flex-1 overflow-hidden flex flex-col w-full";
+        
+        if (state.phase === 'lang') renderLang(content);
+        else if (state.phase === 'category') renderCategory(content, langData);
+        else if (state.phase === 'scenario') renderScenario(content, langData);
+        else if (state.phase === 'game') renderGame(content, langData);
+        else if (state.phase === 'result') renderResult(content, langData);
+
+        app.appendChild(content);
+    }
+
+    function renderLang(container) {
+        const langs = [
+            { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
+            { code: 'en', name: 'English', flag: '🇬🇧' },
+            { code: 'fr', name: 'Français', flag: '🇫🇷' },
+            { code: 'es', name: 'Español', flag: '🇪🇸' },
+            { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+            { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+            { code: 'ur', name: 'اردو', flag: '🇵🇰' },
+        ];
+        
+        container.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full p-8 animate-slide">
+                <div class="text-6xl mb-8 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">🌍</div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl">
+                    ${langs.map(l => `
+                        <button onclick="setLang('${l.code}')" class="bg-slate-800 hover:bg-slate-700 p-6 rounded-2xl flex flex-col items-center border border-slate-600 transition-all btn-hover-effect">
+                            <span class="text-4xl mb-3">${l.flag}</span>
+                            <span class="text-lg font-semibold">${l.name}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderCategory(container, t) {
+        container.innerHTML = `
+            <div class="flex flex-row items-center justify-center h-full p-10 animate-slide gap-10">
+                <button onclick="setCategory('countries')" class="group relative w-full max-w-md h-64 bg-gradient-to-br from-red-900/80 to-slate-900 p-8 rounded-3xl border border-red-800/50 hover:border-red-500 transition-all text-left flex flex-col justify-end btn-hover-effect overflow-hidden">
+                    <div class="absolute top-4 right-6 text-8xl opacity-10 group-hover:opacity-20 transition-opacity">🏛️</div>
+                    <div class="relative z-10">
+                        <h3 class="text-3xl font-bold text-red-400 mb-2 group-hover:text-red-300">${t.countries}</h3>
+                        <div class="w-full h-1.5 bg-red-900 rounded mt-2"></div>
+                    </div>
+                </button>
+
+                <button onclick="setCategory('companies')" class="group relative w-full max-w-md h-64 bg-gradient-to-br from-green-900/80 to-slate-900 p-8 rounded-3xl border border-green-800/50 hover:border-green-500 transition-all text-left flex flex-col justify-end btn-hover-effect overflow-hidden">
+                    <div class="absolute top-4 right-6 text-8xl opacity-10 group-hover:opacity-20 transition-opacity">🏭</div>
+                    <div class="relative z-10">
+                        <h3 class="text-3xl font-bold text-green-400 mb-2 group-hover:text-green-300">${t.companies}</h3>
+                        <div class="w-full h-1.5 bg-green-900 rounded mt-2"></div>
+                    </div>
+                </button>
+            </div>
+        `;
+    }
+
+    function renderScenario(container, t) {
+        const keys = state.category === 'countries' 
+            ? ['climate', 'migration', 'economy', 'war'] 
+            : ['apple', 'amazon', 'tesla', 'boston'];
+            
+        container.innerHTML = `
+            <div class="flex flex-col h-full p-8 animate-slide items-center justify-center">
+                <h2 class="text-center text-3xl font-bold text-slate-300 mb-10">${t.selectScen}</h2>
+                <div class="grid grid-cols-2 gap-6 w-full max-w-4xl">
+                    ${keys.map(k => `
+                        <button onclick="startGame('${k}')" class="bg-slate-800 p-8 rounded-2xl border border-slate-700 flex items-center justify-between hover:bg-slate-700 hover:border-blue-500 transition-all btn-hover-effect">
+                            <span class="font-bold text-xl">${t.scenarios[k]}</span>
+                            <span class="text-slate-500 text-2xl">➜</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderGame(container, t) {
+        const scenarioName = t.scenarios[state.scenarioKey];
+        const opponentName = t.opponents[state.scenarioKey];
+        
+        const qIndex = (state.turn - 1) % 4;
+        const currentData = t.questions[qIndex];
+        
+        // --- CEVAPLARI KARIŞTIRMA (SHUFFLE) ---
+        // Her render işleminde cevapları karıştırıyoruz ki butonların yeri değişsin.
+        const shuffledAnswers = shuffleArray(currentData.a);
+
+        let barColor = state.score > 60 ? 'bg-green-500' : (state.score < 30 ? 'bg-red-500' : 'bg-yellow-500');
+
+        container.innerHTML = `
+            <div class="flex flex-col h-full">
+                <div class="bg-slate-800/80 px-8 py-3 shadow border-b border-slate-700 shrink-0">
+                    <div class="flex justify-between items-center text-sm text-slate-300 mb-2">
+                        <span class="font-bold text-lg text-red-400">VS: ${opponentName}</span>
+                        <span class="font-mono bg-slate-900 px-3 py-1 rounded border border-slate-700">${t.turn}: ${state.turn}/${state.maxTurns}</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                         <span class="text-xs text-slate-500 w-24 text-right">${t.relation}</span>
+                         <div class="flex-1 h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-600">
+                            <div class="h-full ${barColor} transition-all duration-700 ease-out" style="width: ${state.score}%"></div>
+                        </div>
+                        <span class="text-xs font-mono text-white w-8">${state.score}%</span>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex overflow-hidden">
+                    <div id="chat-feed" class="flex-1 chat-area p-6 space-y-6 bg-slate-900/50">
+                        ${state.history.map(msg => `
+                            <div class="flex w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}">
+                                <div class="p-4 max-w-[70%] text-base shadow-lg ${msg.sender === 'user' ? 'text-white msg-user' : 'text-slate-200 msg-bot'}">
+                                    ${msg.text}
+                                </div>
+                            </div>
+                        `).join('')}
+                        
+                        <div class="flex w-full justify-start animate-slide">
+                            <div class="bg-slate-800 text-white p-5 max-w-[75%] text-base shadow-xl border-l-4 border-red-500 msg-bot">
+                                <div class="text-xs text-red-400 font-bold mb-2 uppercase tracking-wider flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                    ${opponentName}
+                                </div>
+                                ${currentData.q}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800 p-6 border-l border-slate-700 w-1/3 min-w-[300px] flex flex-col justify-center shadow-2xl z-20">
+                        <div class="grid grid-cols-1 gap-4 h-full overflow-y-auto">
+                            <!-- Karıştırılmış cevapları ekrana basıyoruz -->
+                            ${shuffledAnswers.map(opt => `
+                                <button onclick="handleTurn('${opt.t.replace(/'/g, "\\'")}', ${opt.s}, '${currentData.q.replace(/'/g, "\\'")}')" 
+                                        class="text-left p-4 rounded-xl bg-slate-700 hover:bg-blue-600 border border-slate-600 hover:border-blue-400 text-sm md:text-base active:scale-95 transition-all shadow-md flex items-center h-full">
+                                    ${opt.t}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => {
+            const chat = document.getElementById('chat-feed');
+            if(chat) chat.scrollTop = chat.scrollHeight;
+        }, 50);
+    }
+
+    function renderResult(container, t) {
+        const won = state.score >= 50;
+        const color = won ? 'text-green-400' : 'text-red-500';
+        
+        container.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full p-10 text-center animate-slide bg-slate-900">
+                <div class="text-8xl mb-6 animate-bounce">${won ? '🕊️' : '💥'}</div>
+                <h2 class="text-4xl font-bold ${color} mb-6 tracking-tight">${won ? t.win : t.lose}</h2>
+                <p class="text-slate-300 text-xl mb-10 max-w-2xl leading-relaxed">${won ? t.winMsg : t.loseMsg}</p>
+                
+                <div class="bg-slate-800 p-6 rounded-2xl w-64 mb-10 border border-slate-700 shadow-xl">
+                    <div class="text-sm text-slate-500 mb-2 uppercase tracking-widest">Score</div>
+                    <div class="text-5xl font-bold font-mono text-white">${state.score}/100</div>
+                </div>
+
+                <button onclick="setLang('${state.lang}')" class="px-10 py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-colors shadow-lg hover:shadow-blue-500/50">
+                    ${t.restart} ↻
+                </button>
+            </div>
+        `;
+    }
+
+    function setLang(code) { state.lang = code; state.phase = 'category'; render(); }
+    function setCategory(cat) { state.category = cat; state.phase = 'scenario'; render(); }
+    function startGame(key) { 
+        state.scenarioKey = key; 
+        state.phase = 'game'; 
+        state.turn = 1; 
+        state.score = 50; 
+        state.history = []; 
+        render(); 
+    }
+    
+    function handleTurn(ans, scoreDelta, question) {
+        state.history.push({ sender: 'bot', text: question });
+        state.history.push({ sender: 'user', text: ans });
+        
+        state.score += scoreDelta;
+        if(state.score > 100) state.score = 100;
+        if(state.score < 0) state.score = 0;
+        
+        if(state.turn >= state.maxTurns || state.score <= 0) {
+            state.phase = 'result';
+        } else {
+            state.turn++;
+        }
+        render();
+    }
+
+    render();
+</script>
+</body>
+</html>
